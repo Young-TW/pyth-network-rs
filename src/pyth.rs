@@ -9,6 +9,8 @@ use std::fs;
 
 const BASE_URL: &str = "https://hermes.pyth.network";
 
+type SharedPriceMap = Arc<Mutex<Vec<(String, f64)>>>;
+
 /// 訂閱 Pyth 即時價格串流，並將價格回傳給 callback 函數。
 ///
 /// # 參數
@@ -48,7 +50,9 @@ where
             }
             Ok(_) => {} // 略過 Ping/Comment
             Err(e) => {
-                eprintln!("SSE 錯誤: {}", e);
+                eprintln!("SSE 錯誤: {}，3 秒後嘗試重連", e);
+                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                break;
             }
         }
     }
@@ -68,31 +72,30 @@ pub async fn get_pyth_feed_id(symbol: &str, category: &str) -> String {
     return raw.to_string();
 }
 
-pub fn spawn_price_stream(symbol: &str, category: &str, prices: Arc<Mutex<Vec<(String, f64)>>>) {
+pub fn spawn_price_stream(symbol: &str, category: &str, prices: SharedPriceMap) {
     let symbol = symbol.to_string();
     let category = category.to_string();
     tokio::spawn(async move {
         let id = get_pyth_feed_id(&symbol, &category).await;
         let symbol_clone = symbol.clone();
         if let Err(e) = get_price_stream_from_pyth(id.as_str(), move |price| {
-            update_price(&symbol_clone, price, &prices)
-        })
-        .await
+            let prices = Arc::clone(&prices);
+            let symbol_clone = symbol_clone.clone();
+            tokio::spawn(async move {
+                update_price(&symbol_clone, price, &prices).await;
+            });
+        }).await
         {
             eprintln!("Error occurred for {}: {}", symbol, e);
         }
     });
 }
 
-fn update_price(symbol: &str, price: f64, prices: &Arc<Mutex<Vec<(String, f64)>>>) {
-    let symbol = symbol.to_string(); // Clone symbol to ensure it is owned
-    let prices = Arc::clone(prices); // Clone Arc to ensure it is owned
-    tokio::spawn(async move {
-        let mut prices = prices.lock().await;
-        if let Some(entry) = prices.iter_mut().find(|(s, _)| s == &symbol) {
-            entry.1 = price;
-        } else {
-            prices.push((symbol, price));
-        }
-    });
+async fn update_price(symbol: &str, price: f64, prices: &Arc<Mutex<Vec<(String, f64)>>>) {
+    let mut prices = prices.lock().await;
+    if let Some(entry) = prices.iter_mut().find(|(s, _)| s == symbol) {
+        entry.1 = price;
+    } else {
+        prices.push((symbol.to_string(), price));
+    }
 }
