@@ -1,7 +1,7 @@
-use pyth::{get_price_stream_from_pyth, get_pyth_feed_id};
-use tokio::sync::Mutex;
+use pyth::spawn_price_stream;
 use tokio::time::{sleep, Duration};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 mod pyth;
 
@@ -23,35 +23,6 @@ async fn main() {
                 println!("{}: {:.2}", symbol, price);
             }
         }
-        sleep(Duration::from_millis(1000)).await;
+        sleep(Duration::from_millis(1)).await;
     }
-}
-
-fn spawn_price_stream(symbol: &str, category: &str, prices: Arc<Mutex<Vec<(String, f64)>>>) {
-    let symbol = symbol.to_string();
-    let category = category.to_string();
-    tokio::spawn(async move {
-        let id = get_pyth_feed_id(&symbol, &category).await;
-        let symbol_clone = symbol.clone();
-        if let Err(e) = get_price_stream_from_pyth(id.as_str(), move |price| {
-            update_price(&symbol_clone, price, &prices)
-        })
-        .await
-        {
-            eprintln!("Error occurred for {}: {}", symbol, e);
-        }
-    });
-}
-
-fn update_price(symbol: &str, price: f64, prices: &Arc<Mutex<Vec<(String, f64)>>>) {
-    let symbol = symbol.to_string(); // Clone symbol to ensure it is owned
-    let prices = Arc::clone(prices); // Clone Arc to ensure it is owned
-    tokio::spawn(async move {
-        let mut prices = prices.lock().await;
-        if let Some(entry) = prices.iter_mut().find(|(s, _)| s == &symbol) {
-            entry.1 = price;
-        } else {
-            prices.push((symbol, price));
-        }
-    });
 }
