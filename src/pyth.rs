@@ -1,61 +1,11 @@
 use eventsource_client::Client as EventSourceClient; // 避免與 reqwest::Client 衝突
 use eventsource_client::{ClientBuilder, SSE};
 use futures::StreamExt;
-use reqwest::Client;
-use serde::Deserialize;
 use serde_json::Value;
 use std::error::Error;
 use std::fs;
 
 const BASE_URL: &str = "https://hermes.pyth.network";
-
-#[derive(Debug, Deserialize)]
-struct PythFeed {
-    id: String,
-    product: PythProduct,
-}
-
-#[derive(Debug, Deserialize)]
-struct PythProduct {
-    base: String,
-    #[serde(rename = "asset_type")]
-    asset_type: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct PythPriceEntry {
-    price: PythPrice,
-}
-
-#[derive(Debug, Deserialize)]
-struct PythPrice {
-    price: i64,
-    expo: i32,
-}
-
-/// 查詢最新價格（會自動找 feed id）
-pub async fn get_price_from_pyth(id: &str) -> Result<f64, String> {
-    let url = format!("{}/api/latest_price_feeds?ids[]={}", BASE_URL, id);
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("[Pyth] 查詢 {} 價格失敗：{}", id, e))?;
-
-    let data: Vec<PythPriceEntry> = response
-        .json()
-        .await
-        .map_err(|e| format!("[Pyth] JSON 格式錯誤：{}", e))?;
-
-    let entry = data.get(0).ok_or("[Pyth] 無價格資料")?;
-    let value = entry.price.price as f64 * 10f64.powi(entry.price.expo);
-    Ok(value)
-}
 
 /// 訂閱 Pyth 即時價格串流，並將價格回傳給 callback 函數。
 ///
@@ -108,7 +58,7 @@ pub async fn get_pyth_feed_id(symbol: &str, category: &str) -> String {
     let target = symbol.to_uppercase();
     let data = fs::read_to_string("data/id.toml").expect("無法讀取 Pyth 配置檔案");
     let pairs: toml::Value = toml::from_str(&data).expect("無法解析 Pyth 配置檔案");
-    let feeds = pairs.get("id").expect("無法找到 feeds");
+    let feeds = pairs.get(category).expect("無法找到 feeds");
     let feed_id = feeds
         .get(&target)
         .unwrap_or_else(|| panic!("無法找到 feed_id, symbol = {}", symbol));

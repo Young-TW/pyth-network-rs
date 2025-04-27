@@ -12,7 +12,7 @@ async fn main() {
     // 啟動 BTC 價格流
     let btc_prices = Arc::clone(&prices);
     tokio::spawn(async move {
-        let id = get_pyth_feed_id("BTC", "crypto").await;
+        let id = get_pyth_feed_id("BTC", "Crypto").await;
         if let Err(e) = get_price_stream_from_pyth(id.as_str(), move |price| {
             update_price("BTC", price, &btc_prices)
         })
@@ -25,7 +25,7 @@ async fn main() {
     // 啟動 ETH 價格流
     let eth_prices = Arc::clone(&prices);
     tokio::spawn(async move {
-        let id = get_pyth_feed_id("ETH", "crypto").await;
+        let id = get_pyth_feed_id("ETH", "Crypto").await;
         if let Err(e) = get_price_stream_from_pyth(id.as_str(), move |price| {
             update_price("ETH", price, &eth_prices)
         })
@@ -38,7 +38,7 @@ async fn main() {
     // 啟動 SOL 價格流
     let sol_prices = Arc::clone(&prices);
     tokio::spawn(async move {
-        let id = get_pyth_feed_id("SOL", "crypto").await;
+        let id = get_pyth_feed_id("SOL", "Crypto").await;
         if let Err(e) = get_price_stream_from_pyth(id.as_str(), move |price| {
             update_price("SOL", price, &sol_prices)
         })
@@ -57,7 +57,7 @@ async fn main() {
                 println!("{}: {:.2}", symbol, price);
             }
         }
-        sleep(Duration::from_secs(1)).await;
+        sleep(Duration::from_millis(1)).await;
     }
 }
 
