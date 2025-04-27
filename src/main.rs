@@ -13,7 +13,12 @@ async fn main() {
     spawn_price_stream("BTC", "Crypto", Arc::clone(&prices));
     spawn_price_stream("ETH", "Crypto", Arc::clone(&prices));
     spawn_price_stream("SOL", "Crypto", Arc::clone(&prices));
+    spawn_price_stream("AAVE", "Crypto", Arc::clone(&prices));
+    spawn_price_stream("1INCH", "Crypto", Arc::clone(&prices));
+
     spawn_price_stream("TSLA", "Stock", Arc::clone(&prices));
+    spawn_price_stream("AMD", "Stock", Arc::clone(&prices));
+    spawn_price_stream("AAPL", "Stock", Arc::clone(&prices));
 
     // 持續印出最新價格
     loop {
