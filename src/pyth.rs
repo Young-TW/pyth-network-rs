@@ -1,7 +1,7 @@
 use eventsource_client::Client as EventSourceClient; // 避免與 reqwest::Client 衝突
 use eventsource_client::{ClientBuilder, SSE};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
 use futures::StreamExt;
 use serde_json::Value;
 use std::error::Error;
@@ -72,7 +72,12 @@ pub async fn get_pyth_feed_id(symbol: &str, category: &str) -> String {
     return raw.to_string();
 }
 
-pub fn spawn_price_stream(symbol: &str, category: &str, prices: SharedPriceMap) {
+pub fn spawn_price_stream(
+    symbol: &str,
+    category: &str,
+    prices: SharedPriceMap,
+    tx: watch::Sender<Vec<(String, f64)>>,
+) {
     let symbol = symbol.to_string();
     let category = category.to_string();
     tokio::spawn(async move {
@@ -81,21 +86,30 @@ pub fn spawn_price_stream(symbol: &str, category: &str, prices: SharedPriceMap) 
         if let Err(e) = get_price_stream_from_pyth(id.as_str(), move |price| {
             let prices = Arc::clone(&prices);
             let symbol_clone = symbol_clone.clone();
+            let tx = tx.clone();
             tokio::spawn(async move {
-                update_price(&symbol_clone, price, &prices).await;
+                update_price(&symbol_clone, price, &prices, &tx).await;
             });
-        }).await
+        })
+        .await
         {
             eprintln!("Error occurred for {}: {}", symbol, e);
         }
     });
 }
 
-async fn update_price(symbol: &str, price: f64, prices: &Arc<Mutex<Vec<(String, f64)>>>) {
+async fn update_price(
+    symbol: &str,
+    price: f64,
+    prices: &Arc<Mutex<Vec<(String, f64)>>>,
+    tx: &watch::Sender<Vec<(String, f64)>>,
+) {
     let mut prices = prices.lock().await;
     if let Some(entry) = prices.iter_mut().find(|(s, _)| s == symbol) {
         entry.1 = price;
     } else {
         prices.push((symbol.to_string(), price));
     }
+    // 通知 watch 接收者價格已更新
+    let _ = tx.send(prices.clone());
 }
