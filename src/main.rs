@@ -20,6 +20,8 @@ async fn main() {
     spawn_price_stream("AMD", "Stock", Arc::clone(&prices));
     spawn_price_stream("AAPL", "Stock", Arc::clone(&prices));
 
+    spawn_price_stream("USD/TWD", "Forex", Arc::clone(&prices));
+
     // 持續印出最新價格
     loop {
         {
